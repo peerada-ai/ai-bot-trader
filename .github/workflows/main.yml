@@ -1,0 +1,29 @@
+name: Run Binance Bot Daily
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # รันทุกวัน 9 โมงเช้าไทย (2AM UTC)
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Run bot
+      env:
+        BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
+        BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
+      run: |
+        python main.py  # 👈 เปลี่ยนตรงนี้เป็นชื่อไฟล์บอทของพี่ เช่น btc_smart_bot.py
