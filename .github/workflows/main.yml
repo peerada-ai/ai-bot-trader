@@ -1,29 +1,90 @@
 name: Run Binance Bot Daily
 
 on:
-  schedule:
-    - cron: '0 2 * * *'  # รันทุกวัน 9 โมงเช้าไทย (2AM UTC)
+  # เพิ่ม push เพื่อทดสอบ
+  push:
+    branches: [ main, master ]
+    paths:
+      - '.github/workflows/**'
+      - '**.py'
+      - 'requirements.txt'
+
+  # Manual trigger สำหรับทดสอบ
   workflow_dispatch:
+    inputs:
+      debug_mode:
+        description: 'Run in debug mode'
+        required: false
+        default: 'false'
+        type: boolean
+
+  # Schedule รันทุกวัน
+  schedule:
+    - cron: '0 2 * * *'  # 9AM Thailand time (UTC+7)
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-    - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-    - name: Run bot
-      env:
-        BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
-        BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
-      run: |
-        python btc_smart_bot.py
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            echo "requirements.txt not found"
+            exit 1
+          fi
+
+      - name: Verify Python files exist
+        run: |
+          if [ ! -f btc_smart_bot.py ]; then
+            echo "btc_smart_bot.py not found"
+            exit 1
+          fi
+          echo "All required files found"
+
+      - name: Run bot
+        env:
+          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
+          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
+          DEBUG_MODE: ${{ github.event.inputs.debug_mode }}
+        run: |
+          echo "Starting Binance Bot..."
+          echo "Debug mode: $DEBUG_MODE"
+          python btc_smart_bot.py
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: bot-logs-${{ github.run_id }}
+          path: |
+            *.log
+            logs/
+          retention-days: 7
+        continue-on-error: true
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "Bot execution failed!"
+          echo "Check the logs above for details"
